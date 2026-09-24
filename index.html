@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Two Seats — watch a film together</title>
+<meta name="theme-color" content="#1a1030">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Figtree:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --night: #1a1030;      /* theatre at the moment the lights go down */
+    --velvet: #2b1745;     /* seat backs, panels */
+    --velvet-2: #3a2160;
+    --rose: #e0577f;       /* the curtain */
+    --paper: #f2e4c9;      /* the ticket */
+    --ink: #2a1a2e;
+    --text: #f4ecff;
+    --muted: #b2a3cc;
+    --ok: #7fe0b0;
+    --serif: "Young Serif", Georgia, "Times New Roman", serif;
+    --sans: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh; min-height: 100dvh;
+    background:
+      radial-gradient(120% 60% at 50% -10%, #4a2470 0%, transparent 60%),
+      var(--night);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.5;
+    padding: env(safe-area-inset-top) 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  main { max-width: 1240px; margin: 0 auto; }
+  #lobby, #invite { max-width: 720px; margin-inline: auto; }
+  h1, h2 { font-family: var(--serif); font-weight: 400; margin: 0; line-height: 1.1; }
+  h1 { font-size: clamp(2.4rem, 9vw, 4rem); padding-top: 40px; }
+  h2 { font-size: 1.5rem; }
+  p { margin: 0; }
+  .lead { color: var(--muted); font-size: 1.05rem; margin-top: 12px; max-width: 46ch; }
+  .hidden { display: none !important; }
+
+  button, select, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--ok); outline-offset: 2px; }
+
+  .btn {
+    background: var(--rose); color: #fff; border: 0; border-radius: 999px;
+    padding: 14px 26px; font-weight: 700; font-size: 1.05rem;
+    transition: transform .12s ease, filter .12s ease;
+  }
+  .btn { min-height: 44px; }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:active { transform: scale(.97); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.ghost { background: transparent; border: 2px solid var(--velvet-2); color: var(--text); }
+
+  /* ---------- Lobby ---------- */
+  .films { list-style: none; padding: 0; margin: 28px 0 24px; display: grid; gap: 10px; }
+  .film {
+    width: 100%; text-align: left; background: var(--velvet);
+    border: 2px solid transparent; border-radius: 14px; padding: 16px 18px;
+    display: grid; gap: 2px;
+  }
+  .film[aria-pressed="true"] { border-color: var(--rose); background: var(--velvet-2); }
+  .film b { font-family: var(--serif); font-weight: 400; font-size: 1.2rem; }
+  .film span { color: var(--muted); font-size: .92rem; }
+  .notice {
+    background: var(--velvet); border-left: 4px solid var(--rose);
+    padding: 14px 16px; border-radius: 8px; color: var(--muted); margin-top: 24px;
+  }
+
+  /* ---------- Ticket (the invite) ---------- */
+  .ticket {
+    --notch: 14px;
+    position: relative; display: grid; grid-template-columns: 1fr auto;
+    background: var(--paper); color: var(--ink); border-radius: 12px;
+    margin: 24px 0; overflow: hidden;
+    -webkit-mask: radial-gradient(circle var(--notch) at 0 50%, #0000 96%, #000) left / 51% 100% no-repeat,
+                  radial-gradient(circle var(--notch) at 100% 50%, #0000 96%, #000) right / 51% 100% no-repeat;
+            mask: radial-gradient(circle var(--notch) at 0 50%, #0000 96%, #000) left / 51% 100% no-repeat,
+                  radial-gradient(circle var(--notch) at 100% 50%, #0000 96%, #000) right / 51% 100% no-repeat;
+  }
+  .ticket .main { padding: 20px 22px; min-width: 0; }
+  .ticket .main h2 { font-size: 1.4rem; }
+  .ticket .main p { font-size: .92rem; opacity: .8; margin-top: 4px; }
+  .ticket .link {
+    display: block; margin-top: 14px; padding: 10px 12px; background: #fff8;
+    border: 1px dashed #2a1a2e66; border-radius: 8px; width: 100%;
+    font-size: .85rem; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .ticket .stub {
+    border-left: 2px dashed #2a1a2e55; padding: 20px 18px; display: grid; gap: 8px; align-content: center;
+  }
+  .ticket .stub .btn { padding: 10px 16px; font-size: .95rem; background: var(--ink); }
+  @media (max-width: 520px) {
+    .ticket { grid-template-columns: 1fr; }
+    .ticket .stub { border-left: 0; border-top: 2px dashed #2a1a2e55; grid-auto-flow: column; }
+  }
+
+  /* ---------- Room ---------- */
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0 12px; flex-wrap: wrap; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px;
+    border-radius: 999px; background: var(--velvet); font-size: .92rem;
+  }
+  .pill i { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .pill.on i { background: var(--ok); box-shadow: 0 0 0 4px #7fe0b033; }
+  .pill.err i { background: var(--rose); }
+
+  .screen { position: relative; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; box-shadow: 0 20px 60px #0008; }
+  video { width: 100%; height: 100%; display: block; background: #000; }
+  .overlay {
+    position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; gap: 14px; text-align: center;
+    background: #000c; padding: 20px;
+  }
+  .overlay p { color: var(--muted); max-width: 30ch; margin: 0 auto; }
+
+  .toast {
+    position: absolute; z-index: 2; left: 50%; top: 12px; transform: translateX(-50%);
+    background: #1a1030e6; border: 1px solid var(--rose); border-radius: 999px;
+    padding: 8px 16px; font-size: .9rem; text-align: center; pointer-events: none; max-width: 92%;
+  }
+  .voice {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin-top: 14px; background: var(--velvet); border-radius: 14px; padding: 12px 14px;
+  }
+  .mic {
+    min-height: 44px; display: inline-flex; align-items: center; gap: 10px; border: 0; border-radius: 999px;
+    padding: 10px 18px; font-weight: 700; background: var(--velvet-2); color: var(--text);
+  }
+  .mic svg { width: 18px; height: 18px; fill: currentColor; }
+  .mic[data-state="live"] { background: var(--ok); color: #0d2a1c; }
+  .mic[data-state="muted"] { background: var(--rose); color: #fff; }
+  .voice .vol { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .9rem; flex: 1; min-width: 150px; }
+  .voice input[type=range] { flex: 1; min-width: 0; accent-color: var(--rose); }
+  .speaking { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .9rem; }
+  .speaking i { width: 10px; height: 10px; border-radius: 50%; background: var(--velvet-2); transition: background .15s, box-shadow .15s; }
+  .speaking.on { color: var(--text); }
+  .speaking.on i { background: var(--ok); box-shadow: 0 0 0 5px #7fe0b040; }
+  .hint { color: var(--muted); font-size: .85rem; margin-top: 8px; }
+  .syncrow { margin-top: 12px; }
+  .btn.small { padding: 8px 16px; font-size: .9rem; }
+  .picker { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
+  .picker label { color: var(--muted); font-size: .92rem; }
+  .picker select {
+    flex: 1; min-width: 0; background: var(--velvet); border: 2px solid var(--velvet-2);
+    border-radius: 10px; padding: 10px 12px;
+  }
+
+  .chat { margin-top: 20px; background: var(--velvet); border-radius: 14px; padding: 14px; }
+  .log { max-height: 180px; overflow-y: auto; display: grid; gap: 6px; margin-bottom: 12px; align-content: start; min-height: 48px; }
+  .log p { padding: 8px 12px; border-radius: 14px; max-width: 85%; width: fit-content; word-break: break-word; }
+  .log .me { background: var(--rose); justify-self: end; }
+  .log .them { background: var(--velvet-2); }
+  .log .sys { color: var(--muted); font-size: .88rem; background: none; padding: 2px 0; max-width: 100%; }
+  .chat form { display: flex; gap: 8px; }
+  .chat input {
+    flex: 1; min-width: 0; background: var(--night); border: 2px solid var(--velvet-2);
+    border-radius: 999px; padding: 10px 16px;
+  }
+  .chat .btn { padding: 10px 20px; }
+
+  /* ---------- Responsive layout: phone = stacked, laptop = film + side panel ---------- */
+  .layout { display: grid; gap: 4px; }
+  .side { min-width: 0; }
+  .stage { min-width: 0; }
+  @media (min-width: 980px) {
+    .layout { grid-template-columns: minmax(0, 1fr) 360px; gap: 28px; align-items: start; }
+    .side { position: sticky; top: 16px; }
+    .side .ticket { grid-template-columns: 1fr; margin-top: 0; }
+    .side .ticket .stub { border-left: 0; border-top: 2px dashed #2a1a2e55; grid-auto-flow: column; }
+    .log { max-height: 240px; }
+    .bar { padding-top: 24px; }
+  }
+  @media (max-width: 520px) {
+    body { padding-left: 12px; padding-right: 12px; }
+    .voice .vol { flex-basis: 100%; }
+    .chat form .btn { padding-inline: 16px; }
+  }
+  @media (orientation: landscape) and (max-height: 500px) {
+    h1 { padding-top: 16px; }
+  }
+
+  /* ---------- Movie-only mode (after pressing the mic to mute) ---------- */
+  .focusbar {
+    display: none; position: absolute; z-index: 3; top: 10px; left: 10px; right: 10px;
+    justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap;
+    pointer-events: none; opacity: .4; transition: opacity .25s;
+  }
+  .focusbar > * { pointer-events: auto; }
+  .fgroup { display: flex; gap: 8px; margin-left: auto; }
+  .focusbar:hover, .focusbar:focus-within, .focusbar.awake { opacity: 1; }
+  .fbtn {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 44px; border: 0; border-radius: 999px;
+    padding: 10px 16px; font-weight: 700; font-size: .95rem; color: #fff; box-shadow: 0 4px 14px #0006;
+  }
+  .fbtn svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
+  .fbtn.red { background: #d63b5f; }
+  .fbtn.green { background: var(--ok); color: #0d2a1c; }
+  .fbtn.ghost { background: #000a; padding: 10px 12px; }
+  body.focus { background: #000; }
+  body.focus .focusbar { display: flex; }
+  body.focus .side, body.focus .bar { display: none; }
+  body.focus main { max-width: none; }
+  body.focus .layout { display: block; }
+  body.focus .screen {
+    width: min(100%, calc((100dvh - 32px) * 16 / 9)); margin: 0 auto; box-shadow: none; border-radius: 8px;
+  }
+  body.focus .toast { top: 64px; }
+  .screen:fullscreen { width: 100% !important; height: 100%; aspect-ratio: auto; border-radius: 0; }
+  .screen:-webkit-full-screen { width: 100% !important; height: 100%; aspect-ratio: auto; border-radius: 0; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+
+  <!-- 1. Host lobby -->
+  <section id="lobby">
+    <h1>Two seats,<br>one film.</h1>
+    <p class="lead">Pick a film, open a room, and send your partner the ticket link. Play, pause and skip stay in sync for both of you.</p>
+    <ul class="films" id="films" aria-label="Films"></ul>
+    <button class="btn" id="open" disabled>Open the room</button>
+    <div class="notice hidden" id="lobbyError"></div>
+  </section>
+
+  <!-- 2. Guest arrival -->
+  <section id="invite" class="hidden">
+    <h1>You have a seat saved.</h1>
+    <p class="lead">Your partner invited you to watch a film together. Take your seat to connect.</p>
+    <p style="margin-top:28px"><button class="btn" id="join">Take your seat</button></p>
+  </section>
+
+  <!-- 3. Room -->
+  <section id="room" class="hidden">
+    <div class="layout">
+
+      <div class="stage">
+        <div class="bar">
+          <h2 id="filmTitle">Waiting for the film</h2>
+          <span class="pill" id="status"><i></i><span id="statusText">Connecting…</span></span>
+        </div>
+
+        <div class="screen" id="screen">
+          <video id="video" controls playsinline preload="auto"></video>
+          <div class="toast hidden" id="toast" role="status"></div>
+          <div class="overlay hidden" id="tapPlay">
+            <p>Your browser needs one tap before it can start the film.</p>
+            <button class="btn" id="tapBtn">Tap to join the film</button>
+          </div>
+
+          <!-- Movie-only mode: appears after you press the mic to mute -->
+          <div class="focusbar" id="focusBar">
+            <button class="fbtn red" id="showUi" type="button" aria-label="Microphone is muted. Show controls">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a4 4 0 0 0 4-4V6a4 4 0 0 0-8 0v5a4 4 0 0 0 4 4Zm6-4a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.94V22h2v-3.06A8 8 0 0 0 20 11h-2Z"/><path d="M3 3l18 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>
+              <span id="showUiText">Muted · show controls</span>
+            </button>
+            <div class="fgroup">
+              <button class="fbtn green" id="undo" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a4 4 0 0 0 4-4V6a4 4 0 0 0-8 0v5a4 4 0 0 0 4 4Zm6-4a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.94V22h2v-3.06A8 8 0 0 0 20 11h-2Z"/></svg>
+                Unmute
+              </button>
+              <button class="fbtn ghost" id="fs" type="button" aria-label="Full screen">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v2H6v4H4V4Zm10 0h6v6h-2V6h-4V4ZM4 14h2v4h4v2H4v-6Zm14 0h2v6h-6v-2h4v-4Z"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="side">
+        <div class="ticket hidden" id="ticket">
+          <div class="main">
+            <h2>Send this ticket</h2>
+            <p>Your partner opens the link and joins your room. It works while this page stays open.</p>
+            <input class="link" id="link" readonly aria-label="Invite link">
+          </div>
+          <div class="stub">
+            <button class="btn" id="copy">Copy link</button>
+            <button class="btn hidden" id="share">Share…</button>
+          </div>
+        </div>
+
+        <div class="voice">
+          <button class="mic" id="mic" type="button" data-state="unavailable" aria-live="polite">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a4 4 0 0 0 4-4V6a4 4 0 0 0-8 0v5a4 4 0 0 0 4 4Zm6-4a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.94V22h2v-3.06A8 8 0 0 0 20 11h-2Z"/></svg>
+            <span id="micText">Mic off</span>
+          </button>
+          <label class="vol">Voice <input type="range" id="voiceVol" min="0" max="1" step="0.05" value="1" aria-label="Partner voice volume"></label>
+          <span class="speaking" id="speaking"><i></i><span>Partner</span></span>
+          <audio id="remoteAudio" autoplay playsinline></audio>
+        </div>
+        <p class="hint">Voice only, no camera. Tap the mic to mute: the page switches to movie-only. Use headphones to avoid echo.</p>
+
+        <div class="picker hidden" id="picker">
+          <label for="filmSelect">Film</label>
+          <select id="filmSelect"></select>
+        </div>
+
+        <p class="syncrow"><button class="btn ghost small" id="resync" type="button">Sync everyone to my scene</button></p>
+
+        <div class="chat">
+          <div class="log" id="log" aria-live="polite"></div>
+          <form id="chatForm" autocomplete="off">
+            <input id="chatInput" placeholder="Say something…" maxlength="300" aria-label="Message">
+            <button class="btn" type="submit">Send</button>
+          </form>
+        </div>
+      </aside>
+
+    </div>
+  </section>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const video = $('#video');
+  const roomParam = new URLSearchParams(location.search).get('room');
+
+  let movies = [];
+  let selected = null;
+  let peer = null, conn = null;
+  let isHost = false;
+  let role = 'h';                       // 'h' = host, 'g' = guest
+
+  /* ================= 1. Shared clock =================
+     The host's clock is the reference. The guest measures its offset to it
+     with NTP-style ping/pong over the data channel and keeps the best
+     (lowest round-trip) recent sample. */
+  let offset = 0, rtt = 0, samples = [], pingTimer = null;
+  const hostNow = () => Date.now() + (isHost ? 0 : offset);
+
+  function ping() { send({ type: 'ping', t0: Date.now() }); }
+  function startPings() {
+    samples = [];
+    for (let i = 0; i < 8; i++) setTimeout(ping, i * 150);      // quick burst
+    clearInterval(pingTimer);
+    pingTimer = setInterval(ping, 5000);                         // keep it fresh
+  }
+  function onPong(msg) {
+    const t3 = Date.now();
+    const r = t3 - msg.t0;
+    if (r < 0 || r > 5000) return;
+    samples.push({ rtt: r, off: msg.t1 + r / 2 - t3 });
+    if (samples.length > 12) samples.shift();
+    const best = samples.reduce((a, b) => (b.rtt < a.rtt ? b : a));
+    rtt = best.rtt;
+    if (!isHost) offset = best.off;
+  }
+
+  /* ================= 2. Shared playback state =================
+     One small object describes the whole session:
+       playing  – should the film be running?
+       pos      – film position (seconds) at host time `ref`
+       ref      – host-clock time (ms). In the future = scheduled start.
+       v, by    – version + author, so simultaneous clicks resolve (host wins ties)
+       hold     – auto-paused because someone is buffering
+     Where the film "should be" right now = pos + (hostNow - ref). Both browsers
+     compute this from the same clock, so both land on the same frame. */
+  let S = { v: 0, by: 'h', playing: false, pos: 0, ref: 0, hold: false };
+  let holdBy = null;
+  let waitingStart = false, startTimer = null;
+  let sysSeeking = false, sysTimer = null, stallTimer = null, lastDrift = 0;
+
+  function expectedPos(now = hostNow()) {
+    let p = S.playing ? S.pos + Math.max(0, now - S.ref) / 1000 : S.pos;
+    if (isFinite(video.duration)) p = Math.min(p, video.duration);
+    return p;
+  }
+
+  function sysSeek(t) {
+    if (!isFinite(t)) return;
+    if (video.readyState > 0) {
+      sysSeeking = true;
+      clearTimeout(sysTimer);
+      sysTimer = setTimeout(() => (sysSeeking = false), 4000);
+    }
+    video.currentTime = Math.max(0, t);
+  }
+
+  // Make a new state, tell the partner, and apply it here too.
+  function propose({ playing, pos, hold = false }) {
+    const connected = conn && conn.open;
+    // Scheduled start: both browsers begin at the same wall-clock moment.
+    const lead = playing && connected ? Math.min(1500, Math.max(400, rtt / 2 + 350)) : 0;
+    S = { v: S.v + 1, by: role, playing, pos, ref: hostNow() + lead, hold };
+    holdBy = hold ? role : null;
+    send({ type: 'state', S });
+    applyState();
+  }
+
+  function applyState() {
+    clearTimeout(startTimer);
+    if (video.getAttribute('data-file') && video.readyState < 1) {
+      video.addEventListener('loadedmetadata', applyState, { once: true });
+      return;
+    }
+    video.playbackRate = 1;
+    updateToast();
+    const now = hostNow();
+
+    if (!S.playing) {                                   // frozen on the exact same frame
+      waitingStart = false;
+      if (!video.paused) video.pause();
+      if (Math.abs(video.currentTime - S.pos) > 0.05) sysSeek(S.pos);
+      return;
+    }
+    if (S.ref > now) {                                  // countdown to a shared start
+      waitingStart = true;
+      if (!video.paused) video.pause();
+      if (Math.abs(video.currentTime - S.pos) > 0.05) sysSeek(S.pos);
+      startTimer = setTimeout(startPlay, S.ref - now);
+    } else {
+      startPlay();                                      // already running: catch up
+    }
+  }
+
+  function startPlay() {
+    waitingStart = false;
+    const target = expectedPos();
+    if (Math.abs(video.currentTime - target) > 0.15) sysSeek(target + 0.1);
+    const p = video.play();
+    if (p && p.catch) p.catch(() => $('#tapPlay').classList.remove('hidden'));
+  }
+
+  function updateToast() {
+    const t = $('#toast');
+    if (S.hold) {
+      t.textContent = S.by === role ? 'Buffering… the film resumes for both of you together.'
+                                    : 'Waiting for your partner to catch up…';
+      t.classList.remove('hidden');
+    } else t.classList.add('hidden');
+  }
+
+  /* ---- Continuous correction (every 0.5 s) ----
+     Small drift  -> speed up / slow down by up to 6 % (invisible).
+     Big drift    -> jump to the right spot. */
+  setInterval(() => {
+    if (S.playing && !waitingStart && !video.paused && !video.seeking && !sysSeeking) {
+      const d = video.currentTime - expectedPos();
+      lastDrift = d;
+      if (Math.abs(d) > 0.4) { video.playbackRate = 1; sysSeek(expectedPos() + 0.2); }
+      else if (Math.abs(d) > 0.04) video.playbackRate = Math.min(1.06, Math.max(0.94, 1 - d * 0.6));
+      else video.playbackRate = 1;
+    } else if (!S.playing) lastDrift = video.currentTime - S.pos;
+
+    // I was the one buffering and I'm ready again -> restart both together
+    if (holdBy === role && S.hold && video.readyState >= 3) {
+      propose({ playing: true, pos: video.currentTime });
+    }
+  }, 500);
+
+  setInterval(() => {
+    if (conn && conn.open) {
+      setStatus(`Together · ping ${Math.round(rtt)} ms · off by ${Math.round(Math.abs(lastDrift) * 1000)} ms`, 'on');
+    }
+  }, 1000);
+
+  /* ---- What the person does with the video controls ----
+     Every event is compared with the shared state, so our own corrections
+     are never mistaken for a button press. */
+  video.addEventListener('play', () => {
+    if (S.playing) return;
+    propose({ playing: true, pos: video.currentTime });
+  });
+  video.addEventListener('pause', () => {
+    if (waitingStart) return;
+    if (video.ended) { if (S.playing) propose({ playing: false, pos: video.duration }); return; }
+    if (!S.playing) return;
+    propose({ playing: false, pos: video.currentTime });
+  });
+  video.addEventListener('seeked', () => {
+    if (sysSeeking) { sysSeeking = false; clearTimeout(sysTimer); return; }
+    if (Math.abs(video.currentTime - expectedPos()) < 0.35) return;
+    propose({ playing: S.playing, pos: video.currentTime });
+  });
+  // Buffering: if the film really stalls, pause both until everyone can go on.
+  video.addEventListener('waiting', () => {
+    if (!S.playing || waitingStart) return;
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => {
+      if (video.readyState < 3 && S.playing && !waitingStart) {
+        propose({ playing: false, pos: video.currentTime, hold: true });
+      }
+    }, 800);
+  });
+  ['playing', 'canplay'].forEach((e) => video.addEventListener(e, () => clearTimeout(stallTimer)));
+  video.addEventListener('error', () => {
+    log('The film could not be loaded. Check that the file exists in the repository.', 'sys');
+  });
+
+  /* ================= Voice (microphone only, no video) =================
+   Each person sends their mic to the other over WebRTC (PeerJS media call).
+   If the mic is blocked you can still hear your partner. */
+  let localStream = null, micState = 'unavailable', voiceCall = null, meterTimer = null;
+
+  async function tryMic() {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false,
+      });
+    } catch (e) { return null; }
+  }
+  // A silent placeholder so the call still exists (and you can hear) without a mic.
+  function silentStream() {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    return new Ctx().createMediaStreamDestination().stream;
+  }
+  async function initMic() {
+    const s = navigator.mediaDevices ? await tryMic() : null;
+    if (s) { localStream = s; micState = 'live'; }
+    else {
+      localStream = silentStream(); micState = 'unavailable';
+      log('Microphone is blocked, so you can listen but not talk. Allow the mic in your browser and tap the mic button to try again.', 'sys');
+    }
+    renderMic();
+  }
+  function renderMic() {
+    const b = $('#mic');
+    b.dataset.state = micState;
+    $('#micText').textContent = micState === 'live' ? 'Mic on · tap to mute' : micState === 'muted' ? 'Muted · tap to unmute' : 'Mic blocked · tap to retry';
+  }
+  $('#mic').onclick = async () => {
+    if (micState === 'unavailable') {
+      const s = await tryMic();
+      if (!s) { log('Still no microphone access. Check your browser\'s site permissions.', 'sys'); return; }
+      const track = s.getAudioTracks()[0];
+      const sender = voiceCall && voiceCall.peerConnection &&
+        voiceCall.peerConnection.getSenders().find((x) => x.track && x.track.kind === 'audio');
+      if (sender) await sender.replaceTrack(track);
+      localStream = s; micState = 'live'; renderMic();
+      return;
+    }
+    const t = localStream.getAudioTracks()[0];
+    t.enabled = !t.enabled;
+    micState = t.enabled ? 'live' : 'muted';
+    renderMic();
+    setFocus(micState === 'muted');                    // muting -> movie-only screen
+  };
+  $('#undo').onclick = () => {                         // green button: undo everything
+    const t = localStream.getAudioTracks()[0];
+    t.enabled = true; micState = 'live';
+    renderMic(); setFocus(false);
+  };
+  $('#showUi').onclick = () => setFocus(false);        // red button: show controls, stay muted
+  $('#fs').onclick = () => {
+    const el = $('#screen');
+    if (document.fullscreenElement) { document.exitFullscreen(); return; }
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+  };
+
+  /* ---- movie-only mode ---- */
+  let unread = 0, awakeTimer = null;
+  function setFocus(on) {
+    document.body.classList.toggle('focus', on);
+    if (!on) { unread = 0; renderUnread(); }
+    if (on) wake();
+  }
+  function renderUnread() {
+    $('#showUiText').textContent = unread ? `Muted · ${unread} new message${unread > 1 ? 's' : ''}` : 'Muted · show controls';
+  }
+  function wake() {                                    // buttons fade when idle, wake on touch/move
+    const bar = $('#focusBar');
+    bar.classList.add('awake');
+    clearTimeout(awakeTimer);
+    awakeTimer = setTimeout(() => bar.classList.remove('awake'), 3500);
+  }
+  ['pointermove', 'touchstart', 'click'].forEach((e) => $('#screen').addEventListener(e, wake, { passive: true }));
+  $('#voiceVol').oninput = (e) => { $('#remoteAudio').volume = Number(e.target.value); };
+
+  function bindCall(call) {
+    voiceCall = call;
+    call.on('stream', (s) => {
+      const a = $('#remoteAudio');
+      a.srcObject = s;
+      a.play().catch(() => {});
+      monitor(s);
+      log('Voice connected.', 'sys');
+    });
+    call.on('close', endVoice);
+    call.on('error', endVoice);
+  }
+  function startVoiceCall() {                         // guest calls the host
+    if (!peer || !localStream) return;
+    bindCall(peer.call(roomParam, localStream));
+  }
+  function endVoice() {
+    voiceCall = null;
+    clearInterval(meterTimer);
+    $('#speaking').classList.remove('on');
+    $('#remoteAudio').srcObject = null;
+  }
+  // "Partner is speaking" light
+  function monitor(stream) {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new Ctx();
+      const an = ctx.createAnalyser();
+      an.fftSize = 512;
+      ctx.createMediaStreamSource(stream).connect(an);
+      const buf = new Uint8Array(an.fftSize);
+      clearInterval(meterTimer);
+      meterTimer = setInterval(() => {
+        an.getByteTimeDomainData(buf);
+        let sum = 0;
+        for (const v of buf) { const x = (v - 128) / 128; sum += x * x; }
+        $('#speaking').classList.toggle('on', Math.sqrt(sum / buf.length) > 0.03);
+      }, 150);
+    } catch (e) { /* indicator is optional */ }
+  }
+
+  /* ================= helpers ================= */
+  const show = (id) => {
+    ['lobby', 'invite', 'room'].forEach((s) => $('#' + s).classList.toggle('hidden', s !== id));
+  };
+  const send = (msg) => { if (conn && conn.open) conn.send(msg); };
+
+  function setStatus(text, kind) {
+    $('#statusText').textContent = text;
+    $('#status').className = 'pill' + (kind ? ' ' + kind : '');
+  }
+  function log(text, cls) {
+    const p = document.createElement('p');
+    p.className = cls;
+    p.textContent = text;
+    const box = $('#log');
+    box.appendChild(p);
+    box.scrollTop = box.scrollHeight;
+  }
+  const findMovie = (file) => movies.find((m) => m.file === file);
+
+  let hls = null;
+  function loadMovie(m) {
+    selected = m;
+    $('#filmTitle').textContent = m.title;
+    if (video.getAttribute('data-file') !== m.file) {
+      video.setAttribute('data-file', m.file);
+      if (hls) { hls.destroy(); hls = null; }
+      const url = encodeURI(m.file);
+      if (/\.m3u8($|\?)/i.test(m.file)) {
+        // Big film cut into small pieces (HLS): works around GitHub's 100 MB file limit.
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {          // Safari / iPhone
+          video.src = url;
+        } else if (window.Hls && Hls.isSupported()) {
+          hls = new Hls({ maxBufferLength: 30 });
+          hls.on(Hls.Events.ERROR, (_, d) => {
+            if (d.fatal) log('The film could not be loaded. Check the movies folder and movies.json.', 'sys');
+          });
+          hls.loadSource(url);
+          hls.attachMedia(video);
+        } else log('This browser cannot play this film format.', 'sys');
+      } else {
+        video.src = url;
+        video.load();
+      }
+    }
+    $('#filmSelect').value = m.file;
+  }
+
+  /* ================= movie list ================= */
+  async function loadList() {
+    try {
+      const res = await fetch('movies.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error(res.status);
+      movies = await res.json();
+    } catch (e) {
+      const box = $('#lobbyError');
+      box.textContent = 'Could not read movies.json. Open this site through GitHub Pages or a local server (not by double-clicking the file).';
+      box.classList.remove('hidden');
+      return;
+    }
+    const ul = $('#films');
+    const sel = $('#filmSelect');
+    movies.forEach((m) => {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.className = 'film';
+      b.setAttribute('aria-pressed', 'false');
+      b.innerHTML = '<b></b><span></span>';
+      b.firstChild.textContent = m.title;
+      b.lastChild.textContent = [m.year, m.note].filter(Boolean).join(' – ');
+      b.onclick = () => {
+        selected = m;
+        ul.querySelectorAll('.film').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+        $('#open').disabled = false;
+      };
+      li.appendChild(b);
+      ul.appendChild(li);
+
+      const o = document.createElement('option');
+      o.value = m.file; o.textContent = m.title;
+      sel.appendChild(o);
+    });
+    if (movies.length === 1) ul.querySelector('.film').click();
+  }
+
+  /* ================= connection ================= */
+  function wire(c) {
+    conn = c;
+    c.on('open', () => {
+      setStatus('Together', 'on');
+      $('#ticket').classList.add('hidden');
+      log(isHost ? 'Your partner has taken their seat.' : 'Connected.', 'sys');
+      startPings();
+      if (!isHost) startVoiceCall();
+      if (isHost) {                                    // bring the newcomer to the same scene
+        send({ type: 'movie', file: selected.file });
+        send({ type: 'state', S });
+      }
+    });
+    c.on('data', onMessage);
+    c.on('close', () => {
+      clearInterval(pingTimer);
+      if (voiceCall) voiceCall.close();
+      endVoice();
+      setStatus(isHost ? 'Waiting for partner' : 'Disconnected', isHost ? '' : 'err');
+      log('Your partner left.', 'sys');
+      if (isHost) $('#ticket').classList.remove('hidden');
+      conn = null;
+      if (S.hold) { S = { ...S, v: S.v + 1, by: role, hold: false }; holdBy = null; applyState(); }
+    });
+    c.on('error', () => setStatus('Connection problem', 'err'));
+  }
+
+  function onMessage(msg) {
+    if (!msg || typeof msg !== 'object') return;
+    switch (msg.type) {
+      case 'ping': send({ type: 'pong', t0: msg.t0, t1: Date.now() }); break;
+      case 'pong': onPong(msg); break;
+      case 'movie': {
+        const m = findMovie(msg.file);                 // only films from our own list
+        if (m) { loadMovie(m); $('#tapPlay').classList.add('hidden'); }
+        break;
+      }
+      case 'state': {
+        const n = msg.S;
+        if (!n || typeof n.v !== 'number') break;
+        if (n.v > S.v || (n.v === S.v && n.by === 'h' && S.by !== 'h')) {
+          S = { v: n.v, by: n.by === 'h' ? 'h' : 'g', playing: !!n.playing,
+                pos: Number(n.pos) || 0, ref: Number(n.ref) || 0, hold: !!n.hold };
+          holdBy = null;
+          applyState();
+        }
+        break;
+      }
+      case 'chat':
+        if (typeof msg.text === 'string') log(msg.text.slice(0, 300), 'them');
+        if (document.body.classList.contains('focus')) { unread++; renderUnread(); }
+        break;
+      case 'full':
+        setStatus('Room is full', 'err');
+        log('This room already has two people.', 'sys');
+        break;
+    }
+  }
+
+  /* ================= host flow ================= */
+  function newRoomId() {
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    let s = '';
+    for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return 'twoseats-' + s;
+  }
+
+  $('#open').onclick = async () => {
+    isHost = true; role = 'h';
+    show('room');
+    await initMic();
+    $('#picker').classList.remove('hidden');
+    loadMovie(selected);
+    setStatus('Opening room…');
+
+    const id = newRoomId();
+    peer = new Peer(id);
+    peer.on('open', () => {
+      $('#link').value = location.origin + location.pathname + '?room=' + id;
+      $('#ticket').classList.remove('hidden');
+      if (navigator.share) $('#share').classList.remove('hidden');
+      setStatus('Waiting for partner');
+    });
+    peer.on('call', (call) => {
+      if (voiceCall) { call.close(); return; }
+      call.answer(localStream);
+      bindCall(call);
+    });
+    peer.on('connection', (c) => {
+      if (conn && conn.open) {                         // only two seats
+        c.on('open', () => { c.send({ type: 'full' }); setTimeout(() => c.close(), 300); });
+        return;
+      }
+      wire(c);
+    });
+    peer.on('error', (e) => { setStatus('Could not open room', 'err'); log('Error: ' + e.type, 'sys'); });
+  };
+
+  $('#filmSelect').onchange = (e) => {
+    const m = findMovie(e.target.value);
+    if (!m) return;
+    loadMovie(m);
+    send({ type: 'movie', file: m.file });
+    S = { v: S.v + 1, by: role, playing: false, pos: 0, ref: 0, hold: false };
+    holdBy = null;
+    send({ type: 'state', S });
+    applyState();
+  };
+
+  $('#copy').onclick = async () => {
+    const input = $('#link');
+    try { await navigator.clipboard.writeText(input.value); }
+    catch { input.select(); document.execCommand('copy'); }
+    $('#copy').textContent = 'Copied';
+    setTimeout(() => ($('#copy').textContent = 'Copy link'), 1800);
+  };
+  $('#share').onclick = () => {
+    navigator.share({ title: 'Watch a film with me', text: 'Your seat is saved:', url: $('#link').value }).catch(() => {});
+  };
+
+  /* ================= guest flow ================= */
+  $('#join').onclick = async () => {
+    isHost = false; role = 'g';
+    show('room');
+    await initMic();
+    setStatus('Connecting…');
+    peer = new Peer();
+    peer.on('open', () => wire(peer.connect(roomParam, { reliable: true })));
+    peer.on('error', (e) => {
+      setStatus('Could not connect', 'err');
+      log(e.type === 'peer-unavailable'
+        ? 'This room is closed. Ask your partner to open a new room and send a fresh link.'
+        : 'Error: ' + e.type, 'sys');
+    });
+  };
+
+  $('#tapBtn').onclick = () => { $('#tapPlay').classList.add('hidden'); video.play().catch(() => {}); };
+
+  // Pull everyone to *my* position (manual fix if something ever feels off)
+  $('#resync').onclick = () => propose({ playing: S.playing, pos: video.currentTime });
+
+  /* ================= chat ================= */
+  $('#chatForm').onsubmit = (e) => {
+    e.preventDefault();
+    const input = $('#chatInput');
+    const text = input.value.trim();
+    if (!text) return;
+    log(text, 'me');
+    send({ type: 'chat', text });
+    input.value = '';
+  };
+
+  /* ================= start ================= */
+  loadList().then(() => show(roomParam ? 'invite' : 'lobby'));
+})();
+</script>
+</body>
+</html>
