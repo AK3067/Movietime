@@ -671,7 +671,7 @@
   /* ================= movie list ================= */
   async function loadList() {
     try {
-      const res = await fetch('movies.json', { cache: 'no-store' });
+      const res = await fetch('movies/movies.json', { cache: 'no-store' });
       if (!res.ok) throw new Error(res.status);
       movies = await res.json();
     } catch (e) {
