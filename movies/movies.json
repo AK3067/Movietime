@@ -1,7 +1,14 @@
 [
   {
-    "title": "Toy_Story_5",
+    "title": "Toy Story 5",
     "file": "movies/Toy_Story_5/index.m3u8",
-    "note": "Put your .mp4 in the movies folder, then edit this list"
+    "year": 2024,
+    "note": "Animated adventure film"
+  },
+  {
+    "title": "Toy Story 1995",
+    "file": "movies/Toy_Story_1995/index.m3u8",
+    "year": 1995,
+    "note": "Classic animated film with subtitles"
   }
 ]

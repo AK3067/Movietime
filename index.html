@@ -247,8 +247,8 @@
         </div>
 
         <div class="screen" id="screen">
-          <video id="video" controls playsinline preload="auto"></video>
-          <div class="toast hidden" id="toast" role="status"></div>
+          <video id="video" controls playsinline preload="auto" crossorigin="anonymous"></video>
+          <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
           <div class="overlay hidden" id="tapPlay">
             <p>Your browser needs one tap before it can start the film.</p>
             <button class="btn" id="tapBtn">Tap to join the film</button>
@@ -319,13 +319,17 @@
 
 </main>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js" crossorigin="anonymous"></script>
 <script>
 (() => {
   const $ = (s) => document.querySelector(s);
   const video = $('#video');
   const roomParam = new URLSearchParams(location.search).get('room');
+  if (roomParam && !/^[a-zA-Z0-9-]+$/.test(roomParam)) {
+    console.error('Invalid room parameter');
+    location.href = location.pathname; // Redirect to clean URL
+  }
 
   let movies = [];
   let selected = null;
@@ -402,8 +406,18 @@
   function applyState() {
     clearTimeout(startTimer);
     if (video.getAttribute('data-file') && video.readyState < 1) {
-      video.addEventListener('loadedmetadata', applyState, { once: true });
-      return;
+      // Only wait for metadata if video has a source set
+      if (video.src || (hls && hls.url)) {
+        video.addEventListener('loadedmetadata', applyState, { once: true });
+        // Fallback: if metadata fails to load within 5 seconds, proceed anyway
+        setTimeout(() => {
+          if (video.readyState < 1) {
+            log('Video metadata loading slow or failed. Proceeding with limited functionality.', 'sys');
+            applyState();
+          }
+        }, 5000);
+        return;
+      }
     }
     video.playbackRate = 1;
     updateToast();
@@ -456,7 +470,12 @@
 
     // I was the one buffering and I'm ready again -> restart both together
     if (holdBy === role && S.hold && video.readyState >= 3) {
-      propose({ playing: true, pos: video.currentTime });
+      if (isHost) {
+        propose({ playing: true, pos: video.currentTime });
+      } else {
+        // Guest buffering recovery: request host to resume
+        send({ type: 'bufferingDone', pos: video.currentTime });
+      }
     }
   }, 500);
 
@@ -477,7 +496,10 @@
   });
   video.addEventListener('pause', () => {
     if (waitingStart) return;
-    if (video.ended) { if (S.playing) propose({ playing: false, pos: video.duration }); return; }
+    if (video.ended) {
+      if (S.playing && isHost) propose({ playing: false, pos: video.duration });
+      return;
+    }
     if (!S.playing) return;
     if (!isHost) return; // Only host can trigger pause
     propose({ playing: false, pos: video.currentTime });
@@ -485,6 +507,7 @@
   video.addEventListener('seeked', () => {
     if (sysSeeking) { sysSeeking = false; clearTimeout(sysTimer); return; }
     if (Math.abs(video.currentTime - expectedPos()) < 0.35) return;
+    if (waitingStart) return; // Don't interfere with scheduled starts
     propose({ playing: S.playing, pos: video.currentTime });
   });
   // Buffering: if the film really stalls, pause both until everyone can go on.
@@ -505,7 +528,7 @@
   /* ================= Voice (microphone only, no video) =================
    Each person sends their mic to the other over WebRTC (PeerJS media call).
    If the mic is blocked you can still hear your partner. */
-  let localStream = null, micState = 'unavailable', voiceCall = null, meterTimer = null;
+  let localStream = null, micState = 'unavailable', voiceCall = null, meterTimer = null, audioContext = null;
 
   async function tryMic() {
     try {
@@ -604,15 +627,16 @@
     clearInterval(meterTimer);
     $('#speaking').classList.remove('on');
     $('#remoteAudio').srcObject = null;
+    // Don't close audioContext here as it might be reused
   }
   // "Partner is speaking" light
   function monitor(stream) {
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new Ctx();
-      const an = ctx.createAnalyser();
+      if (!audioContext) audioContext = new Ctx();
+      const an = audioContext.createAnalyser();
       an.fftSize = 512;
-      ctx.createMediaStreamSource(stream).connect(an);
+      audioContext.createMediaStreamSource(stream).connect(an);
       const buf = new Uint8Array(an.fftSize);
       clearInterval(meterTimer);
       meterTimer = setInterval(() => {
@@ -628,7 +652,15 @@
   const show = (id) => {
     ['lobby', 'invite', 'room'].forEach((s) => $('#' + s).classList.toggle('hidden', s !== id));
   };
-  const send = (msg) => { if (conn && conn.open) conn.send(msg); };
+  const send = (msg) => {
+    if (conn && conn.open) {
+      try {
+        conn.send(msg);
+      } catch (e) {
+        console.error('Failed to send message:', e);
+      }
+    }
+  };
 
   function setStatus(text, kind) {
     $('#statusText').textContent = text;
@@ -637,10 +669,15 @@
   function log(text, cls) {
     const p = document.createElement('p');
     p.className = cls;
+    // Use textContent to prevent XSS attacks
     p.textContent = text;
     const box = $('#log');
     box.appendChild(p);
     box.scrollTop = box.scrollHeight;
+    // Limit chat history to prevent memory issues
+    if (box.children.length > 100) {
+      box.removeChild(box.firstChild);
+    }
   }
   const findMovie = (file) => movies.find((m) => m.file === file);
 
@@ -656,17 +693,44 @@
         // Big film cut into small pieces (HLS): works around GitHub's 100 MB file limit.
         if (video.canPlayType('application/vnd.apple.mpegurl')) {          // Safari / iPhone
           video.src = url;
+          video.addEventListener('error', () => {
+            log('The film could not be loaded. Check the movies folder and movies.json.', 'sys');
+          }, { once: true });
         } else if (window.Hls && Hls.isSupported()) {
-          hls = new Hls({ maxBufferLength: 30 });
+          hls = new Hls({
+            maxBufferLength: 30,
+            maxMaxBufferLength: 60,
+            enableWorker: true
+          });
           hls.on(Hls.Events.ERROR, (_, d) => {
-            if (d.fatal) log('The film could not be loaded. Check the movies folder and movies.json.', 'sys');
+            if (d.fatal) {
+              switch (d.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  log('Network error loading film. Retrying...', 'sys');
+                  hls.startLoad();
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  log('Media error. Attempting recovery...', 'sys');
+                  hls.recoverMediaError();
+                  break;
+                default:
+                  log('The film could not be loaded. Check the movies folder and movies.json.', 'sys');
+                  hls.destroy();
+                  break;
+              }
+            }
           });
           hls.loadSource(url);
           hls.attachMedia(video);
-        } else log('This browser cannot play this film format.', 'sys');
+        } else {
+          log('This browser cannot play this film format. Try using Chrome, Firefox, or Safari.', 'sys');
+        }
       } else {
         video.src = url;
         video.load();
+        video.addEventListener('error', () => {
+          log('The film could not be loaded. Check the movies folder and movies.json.', 'sys');
+        }, { once: true });
       }
     }
     $('#filmSelect').value = m.file;
@@ -677,11 +741,15 @@
     try {
       const res = await fetch('movies/movies.json', { cache: 'no-store' });
       if (!res.ok) throw new Error(res.status);
-      movies = await res.json();
+      const data = await res.json();
+      // Validate movie data structure
+      if (!Array.isArray(data)) throw new Error('Invalid movies.json format');
+      movies = data.filter(m => m && typeof m === 'object' && m.title && m.file);
     } catch (e) {
       const box = $('#lobbyError');
       box.textContent = 'Could not read movies.json. Open this site through GitHub Pages or a local server (not by double-clicking the file).';
       box.classList.remove('hidden');
+      console.error('Failed to load movies:', e);
       return;
     }
     const ul = $('#films');
@@ -691,14 +759,26 @@
       const b = document.createElement('button');
       b.className = 'film';
       b.setAttribute('aria-pressed', 'false');
+      b.setAttribute('role', 'button');
+      b.setAttribute('tabindex', '0');
       b.innerHTML = '<b></b><span></span>';
+      // Use textContent to prevent XSS
       b.firstChild.textContent = m.title;
       b.lastChild.textContent = [m.year, m.note].filter(Boolean).join(' – ');
       b.onclick = () => {
         selected = m;
         ul.querySelectorAll('.film').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
         $('#open').disabled = false;
+        // Update the dropdown in the room too
+        $('#filmSelect').value = m.file;
       };
+      // Add keyboard support for accessibility
+      b.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          b.click();
+        }
+      });
       li.appendChild(b);
       ul.appendChild(li);
 
@@ -707,6 +787,11 @@
       sel.appendChild(o);
     });
     if (movies.length === 1) ul.querySelector('.film').click();
+    else if (movies.length === 0) {
+      const box = $('#lobbyError');
+      box.textContent = 'No movies found. Add movies to the movies folder and update movies.json.';
+      box.classList.remove('hidden');
+    }
   }
 
   /* ================= connection ================= */
@@ -740,6 +825,8 @@
 
   function onMessage(msg) {
     if (!msg || typeof msg !== 'object') return;
+    // Validate message structure to prevent injection attacks
+    if (!msg.type || typeof msg.type !== 'string') return;
     switch (msg.type) {
       case 'ping': send({ type: 'pong', t0: msg.t0, t1: Date.now() }); break;
       case 'pong': onPong(msg); break;
@@ -760,8 +847,17 @@
         break;
       }
       case 'chat':
-        if (typeof msg.text === 'string') log(msg.text.slice(0, 300), 'them');
+        if (typeof msg.text === 'string') {
+          // Sanitize incoming chat messages
+          const sanitizedText = msg.text.replace(/[<>]/g, '').slice(0, 300);
+          log(sanitizedText, 'them');
+        }
         if (document.body.classList.contains('focus')) { unread++; renderUnread(); }
+        break;
+      case 'bufferingDone':
+        if (isHost && S.hold && holdBy !== 'h') {
+          propose({ playing: true, pos: msg.pos || video.currentTime });
+        }
         break;
       case 'full':
         setStatus('Room is full', 'err');
@@ -807,7 +903,11 @@
       }
       wire(c);
     });
-    peer.on('error', (e) => { setStatus('Could not open room', 'err'); log('Error: ' + e.type, 'sys'); });
+      peer.on('error', (e) => {
+      setStatus('Could not open room', 'err');
+      log('Error: ' + e.type, 'sys');
+      console.error('PeerJS error:', e);
+    });
   };
 
   $('#filmSelect').onchange = (e) => {
@@ -846,6 +946,7 @@
       log(e.type === 'peer-unavailable'
         ? 'This room is closed. Ask your partner to open a new room and send a fresh link.'
         : 'Error: ' + e.type, 'sys');
+      console.error('PeerJS error:', e);
     });
   };
 
@@ -860,13 +961,37 @@
     const input = $('#chatInput');
     const text = input.value.trim();
     if (!text) return;
-    log(text, 'me');
-    send({ type: 'chat', text });
+    // Sanitize chat input to prevent XSS
+    const sanitizedText = text.replace(/[<>]/g, '');
+    log(sanitizedText, 'me');
+    send({ type: 'chat', text: sanitizedText });
     input.value = '';
   };
 
   /* ================= start ================= */
   loadList().then(() => show(roomParam ? 'invite' : 'lobby'));
+
+  /* ================= cleanup ================= */
+  window.addEventListener('beforeunload', () => {
+    if (peer) {
+      peer.destroy();
+    }
+    if (conn) {
+      conn.close();
+    }
+    if (voiceCall) {
+      voiceCall.close();
+    }
+    if (audioContext) {
+      audioContext.close();
+      audioContext = null;
+    }
+    clearInterval(pingTimer);
+    clearInterval(meterTimer);
+    clearTimeout(startTimer);
+    clearTimeout(sysTimer);
+    clearTimeout(stallTimer);
+  });
 })();
 </script>
 </body>
