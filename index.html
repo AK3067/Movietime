@@ -296,6 +296,7 @@
           <audio id="remoteAudio" autoplay playsinline></audio>
         </div>
         <p class="hint">Voice only, no camera. Tap the mic to mute: the page switches to movie-only. Use headphones to avoid echo.</p>
+        <p class="hint" id="controlHint"></p>
 
         <div class="picker hidden" id="picker">
           <label for="filmSelect">Film</label>
@@ -467,15 +468,18 @@
 
   /* ---- What the person does with the video controls ----
      Every event is compared with the shared state, so our own corrections
-     are never mistaken for a button press. */
+     are never mistaken for a button press. 
+     Only host can play/pause; both can seek. */
   video.addEventListener('play', () => {
     if (S.playing) return;
+    if (!isHost) return; // Only host can trigger play
     propose({ playing: true, pos: video.currentTime });
   });
   video.addEventListener('pause', () => {
     if (waitingStart) return;
     if (video.ended) { if (S.playing) propose({ playing: false, pos: video.duration }); return; }
     if (!S.playing) return;
+    if (!isHost) return; // Only host can trigger pause
     propose({ playing: false, pos: video.currentTime });
   });
   video.addEventListener('seeked', () => {
@@ -712,6 +716,7 @@
       setStatus('Together', 'on');
       $('#ticket').classList.add('hidden');
       log(isHost ? 'Your partner has taken their seat.' : 'Connected.', 'sys');
+      $('#controlHint').textContent = isHost ? 'You control play/pause. Both can seek.' : 'Host controls play/pause. You can seek.';
       startPings();
       if (!isHost) startVoiceCall();
       if (isHost) {                                    // bring the newcomer to the same scene
@@ -779,6 +784,7 @@
     await initMic();
     $('#picker').classList.remove('hidden');
     loadMovie(selected);
+    $('#controlHint').textContent = 'You control play/pause. Both can seek.';
     setStatus('Opening room…');
 
     const id = newRoomId();
@@ -831,6 +837,7 @@
     isHost = false; role = 'g';
     show('room');
     await initMic();
+    $('#controlHint').textContent = 'Host controls play/pause. You can seek.';
     setStatus('Connecting…');
     peer = new Peer();
     peer.on('open', () => wire(peer.connect(roomParam, { reliable: true })));
