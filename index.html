@@ -303,7 +303,10 @@
           <select id="filmSelect"></select>
         </div>
 
-        <p class="syncrow"><button class="btn ghost small" id="resync" type="button">Sync everyone to my scene</button></p>
+        <p class="syncrow">
+          <button class="btn ghost small" id="resync" type="button">Sync everyone to my scene</button>
+          <button class="btn ghost small hidden" id="reconnect" type="button">Reconnect</button>
+        </p>
 
         <div class="chat">
           <div class="log" id="log" aria-live="polite"></div>
@@ -797,7 +800,10 @@
   /* ================= connection ================= */
   function wire(c) {
     conn = c;
+    console.log('Wiring connection:', c.peer);
+
     c.on('open', () => {
+      console.log('Connection opened successfully');
       setStatus('Together', 'on');
       $('#ticket').classList.add('hidden');
       log(isHost ? 'Your partner has taken their seat.' : 'Connected.', 'sys');
@@ -809,18 +815,36 @@
         send({ type: 'state', S });
       }
     });
+
     c.on('data', onMessage);
+
     c.on('close', () => {
+      console.log('Connection closed');
       clearInterval(pingTimer);
       if (voiceCall) voiceCall.close();
       endVoice();
       setStatus(isHost ? 'Waiting for partner' : 'Disconnected', isHost ? '' : 'err');
       log('Your partner left.', 'sys');
       if (isHost) $('#ticket').classList.remove('hidden');
+      if (!isHost) $('#reconnect').classList.remove('hidden'); // Show reconnect button for guests
       conn = null;
       if (S.hold) { S = { ...S, v: S.v + 1, by: role, hold: false }; holdBy = null; applyState(); }
     });
-    c.on('error', () => setStatus('Connection problem', 'err'));
+
+    c.on('error', (err) => {
+      console.error('Connection error:', err);
+      setStatus('Connection problem', 'err');
+      log('Connection error occurred. Please try reconnecting.', 'sys');
+    });
+
+    // Add ice connection state monitoring
+    c.on('iceStateChanged', (state) => {
+      console.log('ICE state changed:', state);
+      if (state === 'disconnected' || state === 'failed' || state === 'closed') {
+        setStatus('Connection unstable', 'err');
+        log('Connection quality degraded. Network issues may affect sync.', 'sys');
+      }
+    });
   }
 
   function onMessage(msg) {
@@ -884,29 +908,70 @@
     setStatus('Opening room…');
 
     const id = newRoomId();
-    peer = new Peer(id);
-    peer.on('open', () => {
+    peer = new Peer(id, {
+      debug: 1 // Enable basic logging for debugging
+    });
+
+    peer.on('open', (peerId) => {
+      console.log('Host peer opened with ID:', peerId);
       $('#link').value = location.origin + location.pathname + '?room=' + id;
       $('#ticket').classList.remove('hidden');
       if (navigator.share) $('#share').classList.remove('hidden');
       setStatus('Waiting for partner');
     });
+
     peer.on('call', (call) => {
-      if (voiceCall) { call.close(); return; }
+      console.log('Incoming voice call from:', call.peer);
+      if (voiceCall) {
+        console.log('Voice call already exists, rejecting new call');
+        call.close();
+        return;
+      }
       call.answer(localStream);
       bindCall(call);
     });
+
     peer.on('connection', (c) => {
+      console.log('Incoming data connection from:', c.peer);
       if (conn && conn.open) {                         // only two seats
-        c.on('open', () => { c.send({ type: 'full' }); setTimeout(() => c.close(), 300); });
+        console.log('Room full, rejecting connection');
+        c.on('open', () => {
+          c.send({ type: 'full' });
+          setTimeout(() => c.close(), 300);
+        });
         return;
       }
       wire(c);
     });
-      peer.on('error', (e) => {
+
+    peer.on('error', (e) => {
+      console.error('Host PeerJS error:', e);
       setStatus('Could not open room', 'err');
-      log('Error: ' + e.type, 'sys');
-      console.error('PeerJS error:', e);
+      let errorMsg = 'Error: ' + e.type;
+      if (e.type === 'peer-unavailable') {
+        errorMsg = 'This peer ID is already in use. Please try again.';
+      } else if (e.type === 'network') {
+        errorMsg = 'Network error. Please check your internet connection.';
+      } else if (e.type === 'server-error') {
+        errorMsg = 'PeerJS server error. Please try again in a moment.';
+      } else if (e.type === 'ssl-unavailable') {
+        errorMsg = 'SSL connection error. Please use HTTPS.';
+      }
+      log(errorMsg, 'sys');
+    });
+
+    peer.on('disconnected', () => {
+      console.log('Host peer disconnected, attempting to reconnect...');
+      if (!conn) {
+        setStatus('Disconnected from server', 'err');
+        log('Lost connection to PeerJS server. Attempting to reconnect...', 'sys');
+      }
+      // Try to reconnect
+      setTimeout(() => {
+        if (peer && !peer.destroyed) {
+          peer.reconnect();
+        }
+      }, 3000);
     });
   };
 
@@ -939,14 +1004,75 @@
     await initMic();
     $('#controlHint').textContent = 'Host controls play/pause. You can seek.';
     setStatus('Connecting…');
-    peer = new Peer();
-    peer.on('open', () => wire(peer.connect(roomParam, { reliable: true })));
+
+    // Add connection timeout
+    let connectionTimeout = setTimeout(() => {
+      if (!conn || !conn.open) {
+        setStatus('Connection timeout', 'err');
+        log('Connection timed out. The host might not be online or network issues may exist.', 'sys');
+      }
+    }, 15000); // 15 second timeout
+
+    peer = new Peer(null, {
+      debug: 1 // Enable basic logging for debugging
+    });
+
+    peer.on('open', (id) => {
+      console.log('Guest peer opened with ID:', id);
+      const connection = peer.connect(roomParam, {
+        reliable: true,
+        serialization: 'json'
+      });
+
+      connection.on('open', () => {
+        clearTimeout(connectionTimeout);
+        wire(connection);
+      });
+
+      connection.on('error', (err) => {
+        clearTimeout(connectionTimeout);
+        console.error('Connection error:', err);
+        setStatus('Connection error', 'err');
+        log('Failed to establish connection. Please try again.', 'sys');
+      });
+
+      connection.on('close', () => {
+        clearTimeout(connectionTimeout);
+        if (!conn || !conn.open) {
+          setStatus('Connection closed', 'err');
+          log('Connection was closed by the host or network.', 'sys');
+        }
+      });
+    });
+
     peer.on('error', (e) => {
+      clearTimeout(connectionTimeout);
       setStatus('Could not connect', 'err');
-      log(e.type === 'peer-unavailable'
-        ? 'This room is closed. Ask your partner to open a new room and send a fresh link.'
-        : 'Error: ' + e.type, 'sys');
+      let errorMsg = 'Error: ' + e.type;
+      if (e.type === 'peer-unavailable') {
+        errorMsg = 'This room is closed. Ask your partner to open a new room and send a fresh link.';
+      } else if (e.type === 'network') {
+        errorMsg = 'Network error. Please check your internet connection and try again.';
+      } else if (e.type === 'server-error') {
+        errorMsg = 'PeerJS server error. Please try again in a moment.';
+      } else if (e.type === 'ssl-unavailable') {
+        errorMsg = 'SSL connection error. Please use HTTPS.';
+      }
+      log(errorMsg, 'sys');
       console.error('PeerJS error:', e);
+    });
+
+    peer.on('disconnected', () => {
+      clearTimeout(connectionTimeout);
+      console.log('Peer disconnected, attempting to reconnect...');
+      setStatus('Disconnected', 'err');
+      log('Connection lost. Attempting to reconnect...', 'sys');
+      // Try to reconnect
+      setTimeout(() => {
+        if (peer && !peer.destroyed) {
+          peer.reconnect();
+        }
+      }, 3000);
     });
   };
 
@@ -954,6 +1080,29 @@
 
   // Pull everyone to *my* position (manual fix if something ever feels off)
   $('#resync').onclick = () => propose({ playing: S.playing, pos: video.currentTime });
+
+  // Manual reconnect button for guests
+  $('#reconnect').onclick = () => {
+    if (isHost) return; // Only guests need reconnect
+    $('#reconnect').classList.add('hidden');
+    setStatus('Reconnecting…');
+    log('Attempting to reconnect...', 'sys');
+
+    // Destroy existing peer and create new one
+    if (peer) {
+      peer.destroy();
+      peer = null;
+    }
+    if (conn) {
+      conn.close();
+      conn = null;
+    }
+
+    // Reinitialize the guest connection
+    setTimeout(() => {
+      $('#join').click();
+    }, 1000);
+  };
 
   /* ================= chat ================= */
   $('#chatForm').onsubmit = (e) => {
