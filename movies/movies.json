@@ -1,14 +1,26 @@
 [
   {
-    "title": "Toy Story 5",
-    "file": "movies/Toy_Story_5/index.m3u8",
-    "year": 2024,
-    "note": "Animated adventure film"
+    "title": "Game_of_Thrones_S01_EP01_-_Winter_Is_Coming",
+    "file": "movies/Game_of_Thrones_S01_EP01_-_Winter_Is_Coming/index.m3u8",
+    "year": 2010,
+    "note": "First episode of the Game of Thrones series"
   },
   {
-    "title": "Toy Story 1995",
-    "file": "movies/Toy_Story_1995/index.m3u8",
-    "year": 1995,
-    "note": "Classic animated film with subtitles"
+    "title": "Game_of_Thrones_S01_EP02_-_The_Kingsroad",
+    "file": "movies/Game_of_Thrones_S01_EP02_-_The_Kingsroad/index.m3u8",
+    "year": 2010,
+    "note": "Second episode of the Game of Thrones series"
+  },
+  {
+    "title": "Game_of_Thrones_S01_EP03_-_Lord_Snow",
+    "file": "movies/Game_of_Thrones_S01_EP03_-_Lord_Snow/index.m3u8",
+    "year": 2010,
+    "note": "Third episode of the Game of Thrones series"
+  },
+  {
+    "title": "Game_of_Thrones_S01_EP04_-_Cripples_Bastards_and_Broken_Things",
+    "file": "movies/Game_of_Thrones_S01_EP04_-_Cripples_Bastards_and_Broken_Things/index.m3u8",
+    "year": 2010,
+    "note": "Fourth episode of the Game of Thrones series"
   }
 ]
