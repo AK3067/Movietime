@@ -1,0 +1,19 @@
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Temporary / Scratch files
+*.tmp
+*.bak
+
+# Raw high-capacity input video files (keep preprocessed HLS segments in movies/)
+*.mkv
+*.avi
+*.wmv
