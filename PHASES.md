@@ -1,13 +1,13 @@
 # Project Phases & Completion Steps
 
 ```
-[Phase 1: Project Setup & Resilient Config]
+[Phase 1: Project Setup & Resilient Config] (DONE)
                    │
                    ▼
-[Phase 2: Local Git Initialization & Staging]
+[Phase 2: Local Git Initialization & Staging] (DONE)
                    │
                    ▼
-[Phase 3: GitHub Remote Connection & Push]
+[Phase 3: GitHub Remote Connection & Push] (IN PROGRESS)
                    │
                    ▼
 [Phase 4: GitHub Pages Deployment & Verification]
@@ -24,20 +24,20 @@
 - [x] Document project architecture in `PROJECT_DETAILS.md` and memory tracking in `memory.md`.
 
 ## Phase 2: Local Git Initialization & Staging
-- [ ] Initialize Git repository with default branch `main`.
-- [ ] Tune `http.postBuffer` to 500MB to support smooth pushing of multi-part video segments.
-- [ ] Stage all source files, documentation, and movie segments (`git add .`).
-- [ ] Commit with clean, informative commit message (`git commit -m "Initial commit: Two Seats watch party app with HLS video"`).
+- [x] Initialize Git repository with default branch `main`.
+- [x] Tune `http.postBuffer` to 500MB to support smooth pushing of multi-part video segments.
+- [x] Stage all source files, documentation, and movie segments (`git add .`).
+- [x] Commit with clean, informative commit message (`git commit -m "Initial commit: Two Seats watch party app with HLS video"`).
 
 ## Phase 3: Remote GitHub Setup & Push
-- [ ] Verify remote repository URL or create target repository on GitHub under account `AK3067`.
-- [ ] Link local repository to remote origin (`git remote add origin <URL>`).
-- [ ] Push branch to GitHub (`git push -u origin main`).
+- [x] Verify remote repository URL (`https://github.com/AK3067/Movietime.git`).
+- [x] Link local repository to remote origin (`git remote add origin https://github.com/AK3067/Movietime.git`).
+- [ ] Push branch to GitHub (`git push -u origin main --force`).
 
 ## Phase 4: GitHub Pages Deployment & Testing
 - [ ] Navigate to GitHub repository **Settings** → **Pages**.
 - [ ] Select **Deploy from a branch**: branch `main`, directory `/(root)`.
-- [ ] Save and wait for GitHub Pages URL (`https://<username>.github.io/<repo>/`).
+- [ ] Save and wait for GitHub Pages URL (`https://ak3067.github.io/Movietime/`).
 - [ ] Test room creation, ticket link sharing, synchronized playback, and voice chat between two tabs/devices.
 
 ## Phase 5: Innovative Ideas & Future Roadmap

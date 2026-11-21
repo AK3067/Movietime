@@ -1,11 +1,11 @@
 # Project Memory & Task Log
 
-## Current Status: Local Git Initialized & Committed (Awaiting GitHub Remote)
-- **Active Task**: Connect to GitHub remote and push `main` branch.
-- **Repository**: `Movie` (Two Seats – Watch a Film Together)
+## Current Status: Pushing Local Project to GitHub
+- **Active Task**: Replace files on remote repository `https://github.com/AK3067/Movietime.git` with local `main` branch.
+- **Repository**: `Movietime` (Two Seats – Watch a Film Together)
 - **Local Branch**: `main`
+- **GitHub Remote**: `origin` -> `https://github.com/AK3067/Movietime.git`
 - **GitHub User**: `AK3067`
-- **Latest Commit**: `0203e0e` ("Initial commit: Two Seats watch party app with HLS video")
 
 ## Completed Tasks
 - [x] Analyzed project structure, file sizes (total ~264MB), and segment formats (HLS .m3u8 + .ts).
@@ -17,8 +17,9 @@
 - [x] Initialized Git repository with `main` as the default branch.
 - [x] Configured Git `http.postBuffer` to 500MB to support seamless streaming segment uploads.
 - [x] Staged all 199 files and created the initial commit cleanly.
+- [x] Connected to GitHub remote `https://github.com/AK3067/Movietime.git`.
+- [x] User confirmed to replace all remote files with the local project version.
 
 ## Pending Tasks
-- [ ] Connect to GitHub remote repository (`git remote add origin https://github.com/AK3067/<repo-name>.git`).
-- [ ] Push local `main` branch to GitHub (`git push -u origin main`).
-- [ ] Enable and verify GitHub Pages under Settings > Pages (branch: `main`, root `/`).
+- [ ] Push local `main` branch to GitHub remote (`git push -u origin main --force`).
+- [ ] Verify GitHub Pages settings (`main` branch, root `/`).
